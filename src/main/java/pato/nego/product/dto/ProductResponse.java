@@ -1,5 +1,6 @@
 package pato.nego.product.dto;
 
+import java.io.Serializable;
 import java.math.BigDecimal;
 import java.util.UUID;
 
@@ -9,7 +10,7 @@ public record ProductResponse(
         UUID id,
         String name,
         BigDecimal price,
-        String unit) {
+        String unit) implements Serializable {
 
     public static ProductResponse from(Product product) {
         return new ProductResponse(
