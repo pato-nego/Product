@@ -30,6 +30,8 @@ replay_pid*
 ### Environment / secrets ###
 .env
 .env.*
+!.env.example
+*.pem
 
 ### IntelliJ IDEA ###
 .idea/
