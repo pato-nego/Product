@@ -1,0 +1,50 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+          cache: maven
+
+      - run: ./mvnw -B verify
+
+
+
+  deploy:
+    needs: test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    concurrency: deploy-production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t product:latest .
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_ed25519
+          echo "${{ secrets.EC2_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519
+
+      - name: Send image
+        run: docker save product:latest | gzip | ssh ec2-user@${{ secrets.EC2_HOST }} 'gunzip | docker load'
+
+      - name: Restart containers
+        run: |
+          scp docker-compose.yml ec2-user@${{ secrets.EC2_HOST }}:~/product/
+          ssh ec2-user@${{ secrets.EC2_HOST }} 'cd ~/product && docker compose up -d && docker image prune -f'
