@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.UUID;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -34,6 +35,11 @@ public class ProductController {
     @GetMapping
     public List<ProductResponse> findAll() {
         return productService.findAll();
+    }
+
+    @GetMapping("/health-check")
+    public ResponseEntity<Void> healthCheck() {
+        return ResponseEntity.ok().build();
     }
 
     @GetMapping("/{id}")

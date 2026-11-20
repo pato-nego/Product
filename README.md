@@ -21,8 +21,11 @@ internet ──► gateway ──► product ──► PostgreSQL (RDS, banco "p
 | `GET` | `/products` | — | `200 OK` com a lista de produtos |
 | `GET` | `/products/{id}` | — | `200 OK` com o produto, ou `404` |
 | `DELETE` | `/products/{id}` | — | `204 No Content`, ou `404` |
+| `GET` | `/products/health-check` | — | `200 OK` sem corpo, enquanto o serviço está de pé |
 
 O `id` é um **UUID v7**, gerado pelo próprio serviço.
+
+O health-check não expõe nenhuma informação interna. Ele é usado para verificar se o serviço está no ar, por exemplo pelas *probes* de um orquestrador.
 
 ### Exemplos
 
