@@ -1,0 +1,159 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: product-config
+data:
+  DATABASE_PORT: '5432'
+  SPRING_DATASOURCE_URL: 'jdbc:postgresql://${DATABASE_HOST}:${DATABASE_PORT}/${DATABASE_NAME}?sslmode=verify-full&sslrootcert=/etc/rds/bundle.pem'
+  REDIS_HOST: product-redis
+  REDIS_PORT: '6379'
+---
+# Valores criados direto no namespace, fora do Git:
+# DATABASE_HOST, DATABASE_NAME, DATABASE_USERNAME, DATABASE_PASSWORD
+apiVersion: v1
+kind: Secret
+metadata:
+  name: product-credentials
+type: Opaque
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: product
+spec:
+  selector:
+    matchLabels:
+      app: product
+  template:
+    metadata:
+      labels:
+        app: product
+    spec:
+      automountServiceAccountToken: false
+      volumes:
+      - name: rds-trust
+        configMap:
+          name: rds-ca
+      containers:
+      - name: product
+        image: pato-nego/product:local
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8080
+        volumeMounts:
+        - name: rds-trust
+          mountPath: /etc/rds
+          readOnly: true
+        envFrom:
+        - configMapRef:
+            name: product-config
+        - secretRef:
+            name: product-credentials
+        resources:
+          requests:
+            cpu: 250m
+            memory: 256Mi
+          limits:
+            memory: 512Mi
+        startupProbe:
+          httpGet:
+            path: /products/health-check
+            port: http
+          timeoutSeconds: 3
+          periodSeconds: 5
+          failureThreshold: 36
+        readinessProbe:
+          httpGet:
+            path: /products/health-check
+            port: http
+          timeoutSeconds: 3
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /products/health-check
+            port: http
+          timeoutSeconds: 3
+          periodSeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: product
+spec:
+  type: ClusterIP
+  selector:
+    app: product
+  ports:
+  - name: http
+    port: 8080
+    targetPort: http
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: product
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: product
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 50
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: product-redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: product-redis
+  template:
+    metadata:
+      labels:
+        app: product-redis
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        args: ["--maxmemory", "100mb", "--maxmemory-policy", "allkeys-lru", "--save", ""]
+        ports:
+        - name: redis
+          containerPort: 6379
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            memory: 160Mi
+        readinessProbe:
+          tcpSocket:
+            port: redis
+          periodSeconds: 5
+        livenessProbe:
+          tcpSocket:
+            port: redis
+          periodSeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: product-redis
+spec:
+  type: ClusterIP
+  selector:
+    app: product-redis
+  ports:
+  - name: redis
+    port: 6379
+    targetPort: redis

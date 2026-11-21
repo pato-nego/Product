@@ -227,6 +227,21 @@ O deploy só acontece se os testes passarem e nunca roda em pull requests. Ele p
 
 O `.env` e o `rds-ca.pem` não passam pelo GitHub: eles são criados uma vez, direto na EC2.
 
+### Kubernetes (EKS)
+
+O [`k8s/k8s.yaml`](k8s/k8s.yaml) segue o mesmo padrão dos demais serviços do grupo e é aplicado no namespace `pato-nego` do cluster EKS:
+
+| Recurso | Papel |
+|---|---|
+| `ConfigMap product-config` | URL do banco (com o CA em `/etc/rds/bundle.pem`) e endereço do Redis |
+| `Secret product-credentials` | `DATABASE_HOST`, `DATABASE_NAME`, `DATABASE_USERNAME` e `DATABASE_PASSWORD`, criados direto no namespace, fora do Git |
+| `Deployment product` | a API, com probes em `/products/health-check` |
+| `Service product` | `product:8080`, o endereço que o gateway e o Order usam |
+| `HorizontalPodAutoscaler product` | de 1 a 3 réplicas, com base em 50% de CPU |
+| `Deployment` e `Service product-redis` | o cache, acessível só dentro do cluster |
+
+O CA do RDS vem do ConfigMap `rds-ca`, que o namespace já tem e que é compartilhado com o Account. A imagem `pato-nego/product:local` é só para imagens construídas localmente. No cluster, ela é trocada pela imagem do ECR.
+
 ## Decisões de projeto
 
 - **UUID v7 como id:** ordenado pelo tempo de criação, o que mantém o índice do banco eficiente, e impossível de adivinhar, ao contrário de um id sequencial.
